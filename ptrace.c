@@ -3,6 +3,7 @@
 #include <string.h> //memset
 #include <stdlib.h> //exit
 #include <stdint.h> //types defintion
+#include <getopt.h> //getopt_long
 
 #include <unistd.h> //fork()
 #include <poll.h>
@@ -36,7 +37,10 @@ typedef enum inf_state_t {
 } inf_state_t;
 
 typedef struct inf_handle {
-	char *progname;
+#ifndef MAX_FILENAME
+#define MAX_FILENAME 256
+#endif
+	char program[MAX_FILENAME];
 	pid_t pid;
 	inf_state_t state;
   Elf_Ehdr *ehdr;
@@ -174,15 +178,73 @@ void do_sigchld(int signo)
 	handle_inf_event();
 }
 
-int main()
+static const char *optString ="e:hv";
+static const struct option longOpts[] = {
+  {"exe", required_argument, NULL, 0 },
+  {"help", no_argument, NULL, 0 },
+  {"version", no_argument, NULL, 0 },
+  { NULL, no_argument, NULL, 0}
+};
+
+static void printUsage(void)
 {
-	char *program = "/home/vijay/ptrace/cdump";
+  printf("ptrace\n");
+  printf("Allowed options: \n");
+  printf("-h [ --help ]                            Display this message\n");
+  printf("-e [ --exe ]                             Exe file name\n");
+  printf("-v [ --version ]                         Display version information\n");
+}
+
+int main(int argc, char *argv[])
+{
 	pid_t pid;
-
+	int opt = -1, retval = -1, longIndex;
 	inf = &inferior;
-	inf->progname = program;
 
-  inf->ehdr = elf_map_file(program, &inf->e_sz);
+  opt = getopt_long(argc, argv, optString, longOpts, &longIndex);
+  while (-1 != opt) {
+    switch(opt) {
+     case 'h':
+       printUsage();
+       exit(0);
+       break;
+     case 'v':
+       fprintf(stderr, "readnote Version 1.0 [20th Jan 2016]\n");
+       exit(0);
+     case 'e':
+       strncpy(inf->program, optarg, sizeof(inf->program));
+       inf->program[MAX_FILENAME] = 0;
+       break;
+     case '?':
+       printUsage();
+       exit(0);
+       break;
+     case 0:
+       if (!strcmp("file-name", longOpts[longIndex].name)) {
+         strncpy(inf->program, optarg, sizeof(inf->program));
+         inf->program[MAX_FILENAME] = 0;
+       } else if (!strcmp("version", longOpts[longIndex].name)) {
+         fprintf(stderr, "ptrace Version 1.0 [14th Jan 2016]\n");
+         exit(0);
+       } else if (!strcmp("help", longOpts[longIndex].name)) {
+         printUsage();
+         exit(0);
+       }
+       break;
+     default:
+       printUsage();
+       exit(0);
+       break;
+    }
+    opt = getopt_long(argc, argv, optString, longOpts, &longIndex);
+  }
+
+	if (!*inf->program) {
+		fprintf(stderr, "Executable not specified\n");
+		printUsage();
+		exit(0);
+	}
+  inf->ehdr = elf_map_file(inf->program, &inf->e_sz);
 	if (NULL == inf->ehdr) {
 		LOG_PRINTF("Cannot map the elf file\n");
 		exit(0);
@@ -200,7 +262,7 @@ int main()
 			exit(0);
 		}
 		DBG_PRINTF( "Now exec'ing the child\n");
-		int rval = execv(program, argv);
+		int rval = execv(inf->program, argv);
 		if (0 > rval) {
 			DBG_PRINTF( "execv returned error\n");
 			exit(0);
