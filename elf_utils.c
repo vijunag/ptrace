@@ -123,8 +123,8 @@ void *elf_translate_core_address(Elf_Ehdr *e, Elf_Addr addr)
 }
 
 int elf_search_symbol(Elf_Ehdr *ehdr,
-											Elf_Addr addr, 
-                      Elf_Addr *value, 
+                      Elf_Addr addr,
+                      Elf_Addr *value,
                       char **name)
 {
   char *strtab;
